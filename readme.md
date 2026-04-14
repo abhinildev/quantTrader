@@ -10,3 +10,4 @@ Some stats tricks:
     4. Differences(Important): df["diff"] = df["mid_price"].diff()Check: df["diff"].mean()
             ≈ 0 → no trend → mean reversion 0 → upward trend  < 0 → downward trend
 
+Somevids-> https://www.youtube.com/watch?v=9yTrfhvJhUw
