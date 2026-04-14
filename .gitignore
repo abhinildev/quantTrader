@@ -1,0 +1,92 @@
+# ----------------------------
+# Python cache & compiled files
+# ----------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ----------------------------
+# Virtual environments
+# ----------------------------
+venv/
+env/
+.venv/
+ENV/
+
+# ----------------------------
+# Jupyter Notebook checkpoints
+# ----------------------------
+.ipynb_checkpoints/
+
+# ----------------------------
+# OS / Editor files
+# ----------------------------
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# PyCharm / IntelliJ
+.idea/
+
+# ----------------------------
+# Logs & temp files
+# ----------------------------
+*.log
+*.tmp
+*.swp
+*.bak
+
+# ----------------------------
+# Data files (IMPORTANT for ML)
+# ----------------------------
+datasets/raw/
+datasets/processed/
+datasets/train/
+datasets/test/
+
+# Allow a placeholder so folders exist
+!datasets/**/.gitkeep
+
+# ----------------------------
+# Model artifacts (later)
+# ----------------------------
+models/
+checkpoints/
+*.pkl
+*.joblib
+*.h5
+*.pt
+
+# ----------------------------
+# Plots & outputs
+# ----------------------------
+outputs/
+plots/
+figures/
+
+# ----------------------------
+# Coverage / testing
+# ----------------------------
+.coverage
+htmlcov/
+.pytest_cache/
+
+# ----------------------------
+# Environment variables
+# ----------------------------
+.env
+.env.*
+
+# ----------------------------
+# Build / distribution
+# ----------------------------
+build/
+dist/
+*.egg-info/
+
+# ----------------------------
+# Misc
+# ----------------------------
+.cache/
