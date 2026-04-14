@@ -1,4 +1,4 @@
-from datamodel import Order, TradingState
+from TradeBots.datamodel import Order, TradingState
 """
 The strategies here that are used are Market making for emeralds 
 Mean reversion is being used for tomatoes
