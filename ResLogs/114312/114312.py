@@ -8,6 +8,10 @@ Market making for ASH and mean reversion for int
 class Trader:
     def run(self, state:TradingState):
         result={}
+        try:
+            data=json.loads(state.traderData) if state.traderData else {}
+        except:
+            data={}
         for product in state.order_depths:
             order_depth=state.order_depths[product]
             orders=[]
@@ -26,9 +30,9 @@ class Trader:
                 if spread<2:
                     result[product]=orders
                     continue
-                
-                buy_price = min(best_bid + 1, best_ask - 1)
-                sell_price = max(best_ask - 1, best_bid + 1)
+                skew=position*0.1
+                buy_price = min(best_bid + 1-skew, best_ask - 1)
+                sell_price = max(best_ask - 1-skew, best_bid + 1)
                 
                 buy_qty=5
                 sell_qty=5
@@ -44,37 +48,31 @@ class Trader:
             ###INT
             elif product=="INTARIAN_PEPPER_ROOT":
                 spread = best_ask - best_bid
-                try:
-                    if state.traderData:
-                        data=json.loads(state.traderData)
-                    else:
-                        data={}
-                except:
-                    data={}
+                
                 prev_price=data.get(product,mid_price)
                 if spread<1:
                     result[product]=orders
                     continue
                 
                 fair_price=prev_price * 0.8 +0.2*mid_price
-                buy_qty=7
-                sell_qty=7
-                if abs(mid_price-fair_price)>3:
-                    buy_qty=8
-                    sell_qty=8
-                threshold=1
+                prev_vol=data.get(product+"_vol",1)
+                vol=0.8* prev_vol +0.2 *abs(mid_price-prev_price)
+                z=(mid_price-fair_price)/max(vol,1)
+                base_size=5
+                size=base_size+int(abs(z))
+                size=min(size,10)
                 buy_price = min(best_bid + 1, best_ask - 1)
                 sell_price = max(best_ask - 1, best_bid + 1)
-                if mid_price < fair_price - threshold:
-                    orders.append(Order(product, buy_price, buy_qty))
-                elif mid_price > fair_price + threshold:
-                    orders.append(Order(product, sell_price, -sell_qty))
-
+                if z<-1:
+                    orders.append(Order(product,buy_price,size))
+                elif z>1:
+                    orders.append(Order(product,sell_price,-size))
                 else:
                     if position < 10:
                         orders.append(Order(product, buy_price, 3))
                     if position > -10:
                         orders.append(Order(product, sell_price, -3))
+                data[product+"_vol"]=vol
                 if position>15:
                     orders=[o for o in orders if o.quantity <0]
                 if position<-15:
@@ -85,4 +83,5 @@ class Trader:
             od=state.order_depths[p]
             if od.buy_orders and od.sell_orders:
                 new_trader_data[p]=(max(od.buy_orders)+min(od.sell_orders))/2
-        return result ,0,json.dumps(new_trader_data)
+    
+        return result ,0,json.dumps(data)
