@@ -4,6 +4,7 @@ from datamodel import Order, TradingState
 class Trader:
     def run(self, state: TradingState):
         result = {}
+
         try:
             data = json.loads(state.traderData) if state.traderData else {}
         except:
@@ -22,10 +23,11 @@ class Trader:
 
                 best_bid = max(order_depth.buy_orders)
                 best_ask = min(order_depth.sell_orders)
+
                 mid_price = (best_bid + best_ask) / 2
                 position = state.position.get(product, 0)
 
-                # ================= ASH =================
+                # ================= ASH (UNCHANGED - STABLE) =================
                 if product == "ASH_COATED_OSMIUM":
                     spread = best_ask - best_bid
 
@@ -33,13 +35,12 @@ class Trader:
                         result[product] = orders
                         continue
 
-                    buy_price = min(mid_price - 1, best_bid + 1)
-                    sell_price = max(mid_price + 1, best_ask - 1)
+                    buy_price = min(best_bid + 1, best_ask - 1)
+                    sell_price = max(best_ask - 1, best_bid + 1)
 
                     skew = position * 0.05
                     buy_price -= skew
                     sell_price -= skew
-
 
                     buy_price = int(round(buy_price))
                     sell_price = int(round(sell_price))
@@ -59,17 +60,25 @@ class Trader:
                     if position < -18:
                         sell_qty = 0
 
+                    FAIR_PRICE = 10000
+
+                    if best_ask < FAIR_PRICE:
+                        orders.append(Order(product, best_ask, 10))
+
+                    if best_bid > FAIR_PRICE:
+                        orders.append(Order(product, best_bid, -10))
+
                     if buy_qty > 0:
                         orders.append(Order(product, buy_price, buy_qty))
-                        orders.append(Order(product, buy_price - 1, buy_qty//3))
-                        orders.append(Order(product, buy_price - 2, buy_qty//4))
+                        orders.append(Order(product, buy_price - 1, buy_qty // 3))
+                        orders.append(Order(product, buy_price - 2, buy_qty // 4))
 
                     if sell_qty > 0:
                         orders.append(Order(product, sell_price, -sell_qty))
-                        orders.append(Order(product, sell_price + 1, -(sell_qty//4)))
-                        orders.append(Order(product, sell_price + 2, -(sell_qty//3)))
+                        orders.append(Order(product, sell_price + 1, -(sell_qty // 4)))
+                        orders.append(Order(product, sell_price + 2, -(sell_qty // 3)))
 
-                # ================= INT =================
+                # ================= INT (FIXED STRATEGY) =================
                 elif product == "INTARIAN_PEPPER_ROOT":
                     spread = best_ask - best_bid
 
@@ -80,82 +89,69 @@ class Trader:
                     prev_price = data.get(product, mid_price)
                     prev_vol = data.get(product + "_vol", 1)
 
-                    fair_price = 0.9 * prev_price + 0.1 * mid_price
+                    # ===== PRICE SIGNAL =====
                     trend = mid_price - prev_price
-                    fair_price += 0.25 * trend
+                    fair_price = 0.65 * prev_price + 0.35 * mid_price + 0.35 * trend
 
-                    vol = 0.7 * prev_vol + 0.3 * abs(mid_price - prev_price)
+                    vol = 0.7 * prev_vol + 0.3 * abs(trend)
 
+                    z = (mid_price - fair_price) / max(vol * 0.7, 1)
+
+                    # ===== ORDER BOOK IMBALANCE (NEW EDGE) =====
                     bid_vol = sum(order_depth.buy_orders.values())
                     ask_vol = -sum(order_depth.sell_orders.values())
                     imbalance = (bid_vol - ask_vol) / max(bid_vol + ask_vol, 1)
 
-                    momentum = mid_price - prev_price
+                    if abs(imbalance) > 0.5:
+                        z += imbalance * 1.0
 
-                    long_mean = data.get(product + "_mean", mid_price)
-                    long_mean = 0.95 * long_mean + 0.05 * mid_price
-                    new_trader_data[product + "_mean"] = long_mean
+                    z += 0.6 * imbalance
 
-                    predicted_price = mid_price + 0.6 * momentum
-                    predicted_price += (long_mean - mid_price) * 0.2
-
-                    z = (mid_price - predicted_price) / max(vol, 1)
-
-                    z += imbalance * 0.5
-
-
+                    # ===== INVENTORY CONTROL =====
                     if position > 10:
-                        z -= 0.4
+                        z -= 0.3
                     elif position < -10:
-                        z += 0.4
+                        z += 0.3
 
                     # edge = max(1, spread // 2)
                     # buy_price = int(round(best_bid + edge))
                     # sell_price = int(round(best_ask - edge))
-
-                    # if abs(z) > 1:
-                    #     buy_price = best_ask
-                    #     sell_price = best_bid
-                    # else:
-                    #     buy_price = int(round(best_bid + 1))
-                    #     sell_price = int(round(best_ask - 1))
-
-                    if abs(z) < 0.6:
-                        continue
-
-                    if abs(z) < 0.8:
+                    if abs(z) < 0.7:
                         buy_price = best_bid + 1
+                        sell_price = best_ask - 1
                     elif abs(z) < 1.5:
                         buy_price = best_bid + 2
+                        sell_price = best_ask - 2
                     else:
                         buy_price = best_ask
+                        sell_price = best_bid
 
-                    size = min(15, 5 + int(abs(z) * 3))
+
+                    size = min(20, 8 + int(abs(z) * 3))
 
                     if abs(z) > 1.5:
-                        size += 3   # push harder
-                    elif abs(z) < 0.8:
-                        size -= 2   # reduce noise trades
+                        size += 5
 
-                    threshold = 0.8 + 0.2 * (abs(position) / 20)
-
-                    if z < -threshold:
+                    # ===== MAIN STRATEGY =====
+                    if z < -0.7:
                         orders.append(Order(product, buy_price, size))
                         orders.append(Order(product, min(buy_price + 1, best_ask), size // 2))
 
-                    elif z > threshold:
+                    elif z > 0.7:
                         orders.append(Order(product, sell_price, -size))
                         orders.append(Order(product, max(sell_price - 1, best_bid), -size // 2))
 
                     else:
                         pass
 
-                    new_trader_data[product + "_vol"] = vol
+                    # ===== CONTROLLED AGGRESSION =====
+                    # if abs(z) > 1.2:
+                    #     if z < 0:
+                    #         orders.append(Order(product, best_ask, size // 3))
+                    #     else:
+                    #         orders.append(Order(product, best_bid, -size // 3))
 
-                    if position > 18:
-                        orders = [o for o in orders if o.quantity < 0]
-                    if position < -18:
-                        orders = [o for o in orders if o.quantity > 0]
+                    new_trader_data[product + "_vol"] = vol
 
                 result[product] = orders
                 new_trader_data[product] = mid_price
