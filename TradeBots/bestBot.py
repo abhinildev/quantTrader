@@ -60,12 +60,12 @@ class Trader:
                     if position < -18:
                         sell_qty = 0
 
-                    FAIR_PRICE = 10000
+                    anchor_price = 10000
 
-                    if best_ask < FAIR_PRICE:
+                    if best_ask < anchor_price:
                         orders.append(Order(product, best_ask, 10))
 
-                    if best_bid > FAIR_PRICE:
+                    if best_bid > anchor_price:
                         orders.append(Order(product, best_bid, -10))
 
                     if buy_qty > 0:
@@ -103,9 +103,12 @@ class Trader:
                     imbalance = (bid_vol - ask_vol) / max(bid_vol + ask_vol, 1)
 
                     if abs(imbalance) > 0.5:
-                        z += imbalance * 1.0
+                        z += imbalance * (0.8 + 0.4 * abs(imbalance))
 
                     z += 0.6 * imbalance
+
+                    inventory_bias = position/20
+                    z -= 0.35 * inventory_bias
 
                     # ===== INVENTORY CONTROL =====
                     if position > 10:
@@ -116,31 +119,40 @@ class Trader:
                     # edge = max(1, spread // 2)
                     # buy_price = int(round(best_bid + edge))
                     # sell_price = int(round(best_ask - edge))
+                    size = min(20, 8 + int(abs(z) * 3))
+
+                    if abs(z) > 1.5:
+                        size += 5
+                    if abs(z) > 2.0:
+                        size += 5
+
+
                     if abs(z) < 0.7:
                         buy_price = best_bid + 1
                         sell_price = best_ask - 1
                     elif abs(z) < 1.5:
                         buy_price = best_bid + 2
                         sell_price = best_ask - 2
+
+                        if imbalance > 0:
+                            buy_price += 1   # slight push
+                        else:
+                            sell_price -= 1  # slight push
+                        orders.append(Order(product, best_bid + 1, size // 3))
                     else:
                         buy_price = best_ask
                         sell_price = best_bid
 
-
-                    size = min(20, 8 + int(abs(z) * 3))
-
-                    if abs(z) > 1.5:
-                        size += 5
-
                     # ===== MAIN STRATEGY =====
-                    if z < -0.7:
+                    threshold = 0.65
+                    if abs(imbalance) > 0.6:
+                        threshold -= 0.1
+                    if z < -threshold:
                         orders.append(Order(product, buy_price, size))
                         orders.append(Order(product, min(buy_price + 1, best_ask), size // 2))
-
-                    elif z > 0.7:
+                    elif z > threshold:
                         orders.append(Order(product, sell_price, -size))
                         orders.append(Order(product, max(sell_price - 1, best_bid), -size // 2))
-
                     else:
                         pass
 
